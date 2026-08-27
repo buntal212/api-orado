@@ -31,9 +31,9 @@ class AuthController extends Controller
             }
         }
 
-        if (! $user || ! $passwordValid) {
+        if (! $user || ! $passwordValid || $user->club === null) {
             throw ValidationException::withMessages([
-                'login' => ['Email/username atau password tidak sesuai.'],
+                'login' => ['Email/username atau password tidak sesuai dengan akun club.'],
             ]);
         }
 

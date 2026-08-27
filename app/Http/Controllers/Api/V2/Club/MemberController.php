@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Anggota;
 use App\Models\Club;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -79,6 +80,12 @@ class MemberController extends Controller
 
     private function club(Request $request): Club
     {
-        return Club::query()->where('user_id', $request->user()->id)->firstOrFail();
+        $club = Club::query()->where('user_id', $request->user()->id)->first();
+
+        if (! $club) {
+            throw new AuthorizationException('Akun login tidak terhubung dengan data club. Silakan login menggunakan akun club.');
+        }
+
+        return $club;
     }
 }

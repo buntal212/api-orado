@@ -16,7 +16,12 @@ class AuthController extends Controller
     {
         $credentials = $request->validated();
         $login = $credentials['login'];
-        $user = User::query()->with('anggota')->where('email', $login)->orWhere('username', $login)->first();
+        $user = User::query()
+            ->with(['anggota', 'club'])
+            ->where(function ($query) use ($login): void {
+                $query->where('email', $login)->orWhere('username', $login);
+            })
+            ->first();
 
         $passwordHashes = array_filter([$user?->pass, $user?->password]);
         $passwordValid = false;
@@ -28,7 +33,9 @@ class AuthController extends Controller
             }
         }
 
-        if (! $user || ! $passwordValid) {
+        $isClubAccount = $user?->club !== null;
+
+        if (! $user || ! $passwordValid || $isClubAccount) {
             throw ValidationException::withMessages([
                 'login' => ['Email/username atau password tidak sesuai.'],
             ]);

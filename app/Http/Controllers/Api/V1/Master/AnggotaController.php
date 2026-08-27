@@ -7,6 +7,7 @@ use App\Models\Anggota;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AnggotaController extends Controller
 {
@@ -80,12 +81,19 @@ class AnggotaController extends Controller
     public function verify(Request $request, Anggota $anggota): JsonResponse
     {
         $validated = $request->validate([
-            'jabatan' => ['required', 'string', 'max:100', 'exists:master_jabatans,nama'],
+            'jabatan' => [
+                Rule::requiredIf((string) $anggota->kelompok_jabatan === '1'),
+                'nullable',
+                'string',
+                'max:100',
+                'exists:master_jabatans,nama',
+            ],
         ]);
 
         $anggota->update([
-            'jabatan' => $validated['jabatan'],
-            'kelompok_jabatan' => '1',
+            'jabatan' => (string) $anggota->kelompok_jabatan === '1'
+                ? $validated['jabatan']
+                : $anggota->jabatan,
             'flag' => 2,
         ]);
 

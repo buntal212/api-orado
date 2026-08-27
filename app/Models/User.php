@@ -24,6 +24,11 @@ class User extends Authenticatable
         return $this->hasOne(Anggota::class);
     }
 
+    public function club(): HasOne
+    {
+        return $this->hasOne(Club::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

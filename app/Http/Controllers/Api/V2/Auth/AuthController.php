@@ -16,7 +16,7 @@ class AuthController extends Controller
     {
         $credentials = $request->validated();
         $login = $credentials['login'];
-        $user = User::query()->with('anggota')
+        $user = User::query()->with(['anggota', 'club'])
             ->where('email', $login)
             ->orWhere('username', $login)
             ->first();
@@ -53,7 +53,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json(['data' => $request->user()->load('anggota')]);
+        return response()->json(['data' => $request->user()->load(['anggota', 'club'])]);
     }
 
     public function logout(Request $request): JsonResponse

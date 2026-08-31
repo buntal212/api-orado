@@ -111,6 +111,7 @@ class AnggotaController extends Controller
         return $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'nik' => ['required', 'digits:16', 'unique:anggotas,nik,'.$anggota?->id],
+            'tanggal_lahir' => ['nullable', 'date'],
             'no_hp' => ['nullable', 'string', 'max:20'],
             'jabatan' => ['nullable', 'string', 'max:100', 'exists:master_jabatans,nama'],
         ]);
@@ -125,6 +126,7 @@ class AnggotaController extends Controller
             'id' => $anggota->id,
             'name' => $anggota->name,
             'nik' => $anggota->nik,
+            'tanggal_lahir' => $anggota->tanggal_lahir,
             'no_hp' => $anggota->no_hp,
             'username' => $anggota->user?->username,
             'email' => $anggota->user?->email,

@@ -17,6 +17,7 @@ class MemberVerificationController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'nik' => ['required', 'digits:16', 'unique:anggotas,nik'],
+            'tanggal_lahir' => ['nullable', 'date'],
             'no_hp' => ['required', 'string', 'max:20'],
             'username' => ['required', 'string', 'max:100', 'unique:users,username'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
@@ -27,6 +28,7 @@ class MemberVerificationController extends Controller
             $anggota = Anggota::create([
                 'name' => $validated['name'],
                 'nik' => $validated['nik'],
+                'tanggal_lahir' => $validated['tanggal_lahir'] ?? null,
                 'no_hp' => $validated['no_hp'],
                 'kelompok_jabatan' => '1',
                 'flag' => 1,
@@ -101,7 +103,7 @@ class MemberVerificationController extends Controller
             'name' => $anggota->name,
             'anggota_id' => $anggota->id,
             'username' => $validated['username'],
-            'email' => 'anggota-'.$anggota->id.'@orado.local',
+            'email' => "a-{$anggota->id}@o.id",
             'password' => $validated['password'],
             'pass' => $validated['password'],
         ]);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Anggota;
 use App\Models\User;
+use App\Services\OradoNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class MemberVerificationController extends Controller
 {
+    public function __construct(private readonly OradoNotificationService $notificationService) {}
+
     public function register(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -24,7 +27,7 @@ class MemberVerificationController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
-        DB::transaction(function () use ($validated): void {
+        [$anggota, $user] = DB::transaction(function () use ($validated): array {
             $anggota = Anggota::create([
                 'name' => $validated['name'],
                 'nik' => $validated['nik'],
@@ -34,7 +37,7 @@ class MemberVerificationController extends Controller
                 'flag' => 1,
             ]);
 
-            User::create([
+            $user = User::create([
                 'name' => $validated['name'],
                 'anggota_id' => $anggota->id,
                 'username' => $validated['username'],
@@ -42,7 +45,11 @@ class MemberVerificationController extends Controller
                 'password' => $validated['password'],
                 // 'pass' => $request->pass,
             ]);
+
+            return [$anggota, $user];
         });
+
+        $this->sendPengurusRegistrationNotification($anggota, $user);
 
         return response()->json([
             'message' => 'Pendaftaran anggota berhasil. Silakan hubungi admin untuk verifikasi.',
@@ -99,7 +106,7 @@ class MemberVerificationController extends Controller
             ]);
         }
 
-        User::create([
+        $user = User::create([
             'name' => $anggota->name,
             'anggota_id' => $anggota->id,
             'username' => $validated['username'],
@@ -108,8 +115,24 @@ class MemberVerificationController extends Controller
             'pass' => $validated['password'],
         ]);
 
+        $this->sendPengurusRegistrationNotification($anggota, $user);
+
         return response()->json([
             'message' => 'Pendaftaran anggota berhasil. Silakan login menggunakan akun baru Anda.',
         ]);
+    }
+
+    private function sendPengurusRegistrationNotification(Anggota $anggota, User $user): void
+    {
+        $isAnggotaKehormatan = (string) $anggota->kelompok_jabatan === '1';
+
+        $this->notificationService->sendToPengurus(
+            $isAnggotaKehormatan ? 'Anggota Kehormatan Baru' : 'Pengurus Baru Mendaftar',
+            $anggota->name.' telah melakukan pendaftaran.',
+            [
+                'type' => 'pengurus_registration',
+                'user_id' => (string) $user->id,
+            ],
+        );
     }
 }

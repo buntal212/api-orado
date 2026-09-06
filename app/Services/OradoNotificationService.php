@@ -1,0 +1,77 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\FcmToken;
+use App\Models\User;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Throwable;
+
+class OradoNotificationService
+{
+    public function __construct(private readonly FirebaseMessagingService $firebaseMessaging) {}
+
+    public function sendToPengurus(string $title, string $body, array $data = []): void
+    {
+        $tokens = FcmToken::query()->where('app_type', 'pengurus')->pluck('token');
+
+        $this->sendToTokens($tokens, $title, $body, $data, 'pengurus');
+    }
+
+    public function sendToClubUser(int $userId, string $title, string $body, array $data = []): void
+    {
+        $tokens = FcmToken::query()
+            ->where('app_type', 'club')
+            ->where('user_id', $userId)
+            ->where('user_type', User::class)
+            ->pluck('token');
+
+        $this->sendToTokens($tokens, $title, $body, $data, 'club', $userId);
+    }
+
+    /**
+     * @param  Collection<int, string>  $tokens
+     */
+    private function sendToTokens(
+        Collection $tokens,
+        string $title,
+        string $body,
+        array $data,
+        string $appType,
+        ?int $userId = null,
+    ): void {
+        if ($tokens->isEmpty()) {
+            Log::info('Tidak ada token FCM tujuan.', [
+                'event_type' => $data['type'] ?? null,
+                'app_type' => $appType,
+                'user_id' => $userId,
+                'device_count' => 0,
+            ]);
+
+            return;
+        }
+
+        try {
+            $results = $this->firebaseMessaging->sendToTokens($tokens, $title, $body, $data);
+            $successCount = count(array_filter($results));
+
+            Log::info('Pengiriman notifikasi ORADO selesai.', [
+                'event_type' => $data['type'] ?? null,
+                'app_type' => $appType,
+                'user_id' => $userId,
+                'device_count' => $tokens->count(),
+                'success_count' => $successCount,
+                'failed_count' => count($results) - $successCount,
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Pengiriman notifikasi ORADO gagal.', [
+                'event_type' => $data['type'] ?? null,
+                'app_type' => $appType,
+                'user_id' => $userId,
+                'device_count' => $tokens->count(),
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+}

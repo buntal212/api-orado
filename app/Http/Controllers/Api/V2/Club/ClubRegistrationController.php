@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V2\Club;
 use App\Http\Controllers\Controller;
 use App\Models\Club;
 use App\Models\User;
+use App\Services\OradoNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class ClubRegistrationController extends Controller
 {
+    public function __construct(private readonly OradoNotificationService $notificationService) {}
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -65,6 +68,16 @@ class ClubRegistrationController extends Controller
 
             return $club;
         });
+
+        $this->notificationService->sendToPengurus(
+            'Club Baru Mendaftar',
+            $club->nama_club.' telah melakukan pendaftaran.',
+            [
+                'type' => 'club_registration',
+                'club_id' => (string) $club->id,
+                'url' => '/club',
+            ],
+        );
 
         return response()->json([
             'message' => 'Pendaftaran club berhasil dikirim. Menunggu verifikasi pengurus ORADO.',

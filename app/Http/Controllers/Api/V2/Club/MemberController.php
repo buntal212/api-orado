@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V2\Club;
 use App\Http\Controllers\Controller;
 use App\Models\Anggota;
 use App\Models\Club;
+use App\Services\OradoNotificationService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +15,8 @@ use Illuminate\Validation\ValidationException;
 
 class MemberController extends Controller
 {
+    public function __construct(private readonly OradoNotificationService $notificationService) {}
+
     public function index(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -99,6 +102,25 @@ class MemberController extends Controller
 
             return [$member->fresh(), false];
         });
+
+        $notificationData = [
+            'type' => 'club_member_registration',
+            'member_id' => (string) $member->id,
+            'club_id' => (string) $club->id,
+        ];
+        $notificationBody = $member->name.' telah didaftarkan pada '.$club->nama_club.'.';
+
+        $this->notificationService->sendToPengurus(
+            'Anggota Club Baru',
+            $notificationBody,
+            $notificationData,
+        );
+        $this->notificationService->sendToClubUser(
+            $club->user_id,
+            'Anggota Club Baru',
+            $notificationBody,
+            $notificationData,
+        );
 
         return response()->json([
             'message' => $isExisting

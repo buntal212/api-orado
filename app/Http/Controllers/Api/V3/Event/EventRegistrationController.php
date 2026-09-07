@@ -7,6 +7,7 @@ use App\Models\MasterEvent;
 use App\Models\PendaftaranEventHeader;
 use App\Models\PendaftaranEventRinci;
 use App\Services\OradoNotificationService;
+use App\Services\TurnstileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,10 @@ use Illuminate\Validation\ValidationException;
 
 class EventRegistrationController extends Controller
 {
-    public function __construct(private readonly OradoNotificationService $notificationService) {}
+    public function __construct(
+        private readonly OradoNotificationService $notificationService,
+        private readonly TurnstileService $turnstile,
+    ) {}
 
     public function events(): JsonResponse
     {
@@ -42,6 +46,13 @@ class EventRegistrationController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate($this->rules(), $this->messages(), $this->attributes());
+
+        if (! $this->turnstile->verify($validated['turnstile_token'], $request->ip())) {
+            throw ValidationException::withMessages([
+                'turnstile_token' => 'Verifikasi keamanan gagal. Silakan coba lagi.',
+            ]);
+        }
+
         $event = MasterEvent::findOrFail($validated['master_event_id']);
 
         if (! $this->pendaftaranAktif($event)) {
@@ -128,6 +139,7 @@ class EventRegistrationController extends Controller
     {
         return [
             'master_event_id' => ['required', 'integer', 'exists:master_events,id'],
+            'turnstile_token' => ['required', 'string'],
             'nama_tim' => ['required', 'string', 'max:150'],
             'nama_pendaftar' => ['nullable', 'string', 'max:150'],
             'no_hp' => ['nullable', 'string', 'max:20'],

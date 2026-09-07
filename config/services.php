@@ -8,6 +8,14 @@ return [
         'private_key' => env('FIREBASE_PRIVATE_KEY'),
     ],
 
+    'turnstile' => [
+        'secret' => env('TURNSTILE_SECRET_KEY'),
+        'verify_url' => env(
+            'TURNSTILE_VERIFY_URL',
+            'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+        ),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

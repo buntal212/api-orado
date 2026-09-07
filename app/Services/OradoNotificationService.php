@@ -23,7 +23,7 @@ class OradoNotificationService
         $data['notification_id'] = (string) $notification->id;
         $tokens = FcmToken::query()->where('app_type', 'pengurus')->get();
 
-        $this->sendToTokens($tokens, $title, $body, $data, 'pengurus', dataOnly: true);
+        $this->sendToTokens($tokens, $title, $body, $data, 'pengurus');
     }
 
     public function sendToClubUser(int $userId, string $title, string $body, array $data = []): void

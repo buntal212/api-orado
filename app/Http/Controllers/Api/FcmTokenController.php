@@ -95,7 +95,6 @@ class FcmTokenController extends Controller
                 'type' => 'notification_test',
                 'url' => '/notifikasi',
             ],
-            dataOnly: true,
         );
         $successCount = count(array_filter($results));
 

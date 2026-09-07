@@ -29,6 +29,21 @@ class FirebaseMessagingService
 
             if (! $dataOnly) {
                 $message['notification'] = ['title' => $title, 'body' => $body];
+                $message['webpush'] = [
+                    'headers' => [
+                        'Urgency' => 'high',
+                        'TTL' => '86400',
+                    ],
+                    'notification' => [
+                        'title' => $title,
+                        'body' => $body,
+                        'icon' => '/icons/icon-192x192.png',
+                        'badge' => '/icons/icon-128x128.png',
+                    ],
+                    'fcm_options' => [
+                        'link' => $data['url'] ?? '/notifikasi',
+                    ],
+                ];
             }
 
             $response = Http::withToken($this->accessToken())

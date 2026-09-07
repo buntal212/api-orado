@@ -93,7 +93,7 @@ class FcmTokenController extends Controller
 
         if ($tokens->isEmpty()) {
             return response()->json([
-                'message' => 'Token notifikasi perangkat ini belum tersedia. Aktifkan notifikasi terlebih dahulu.',
+                'message' => 'Belum ada perangkat dengan notifikasi aktif untuk akun ini.',
             ], 422);
         }
 

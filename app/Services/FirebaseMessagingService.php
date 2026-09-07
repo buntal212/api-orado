@@ -15,17 +15,26 @@ class FirebaseMessagingService
 
     private int $accessTokenExpiresAt = 0;
 
-    public function sendToToken(string $token, string $title, string $body, array $data = []): bool
+    public function sendToToken(string $token, string $title, string $body, array $data = [], bool $dataOnly = false): bool
     {
         try {
+            $message = [
+                'token' => $token,
+                'data' => $this->normalizeData([
+                    ...$data,
+                    'title' => $title,
+                    'body' => $body,
+                ]),
+            ];
+
+            if (! $dataOnly) {
+                $message['notification'] = ['title' => $title, 'body' => $body];
+            }
+
             $response = Http::withToken($this->accessToken())
                 ->acceptJson()
                 ->post($this->messageEndpoint(), [
-                    'message' => [
-                        'token' => $token,
-                        'notification' => ['title' => $title, 'body' => $body],
-                        'data' => $this->normalizeData($data),
-                    ],
+                    'message' => $message,
                 ]);
 
             if ($response->successful()) {
@@ -46,12 +55,12 @@ class FirebaseMessagingService
         return false;
     }
 
-    public function sendToTokens(iterable $tokens, string $title, string $body, array $data = []): array
+    public function sendToTokens(iterable $tokens, string $title, string $body, array $data = [], bool $dataOnly = false): array
     {
         $results = [];
         foreach ($tokens as $token) {
             $value = $token instanceof FcmToken ? $token->token : (string) $token;
-            $results[$value] = $this->sendToToken($value, $title, $body, $data);
+            $results[$value] = $this->sendToToken($value, $title, $body, $data, $dataOnly);
         }
 
         return $results;

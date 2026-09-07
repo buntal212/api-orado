@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('email')->nullable();
             $table->unsignedInteger('jumlah_peserta')->default(0);
             $table->unsignedBigInteger('total_biaya')->default(0);
-            $table->string('status_pendaftaran', 30)->default('menunggu');
+            $table->string('status_pendaftaran', 30)->default('terdaftar');
             $table->string('status_pembayaran', 30)->default('belum_bayar');
             $table->string('bukti_pembayaran')->nullable();
             $table->text('catatan')->nullable();

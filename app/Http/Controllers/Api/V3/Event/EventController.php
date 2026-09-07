@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V3\Event;
 
 use App\Http\Controllers\Controller;
 use App\Models\MasterEvent;
+use App\Models\PendaftaranEventHeader;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +37,40 @@ class EventController extends Controller
         return response()->json([
             'message' => 'Data event berhasil ditampilkan.',
             'data' => $events,
+        ]);
+    }
+
+    public function participants(Request $request): JsonResponse
+    {
+        $validated = $request->validate(
+            [
+                'search' => ['nullable', 'string', 'max:100'],
+                'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            ],
+            $this->validationMessages(),
+            $this->validationAttributes(),
+        );
+
+        $participants = PendaftaranEventHeader::query()
+            ->with([
+                'event:id,kode_event,nama_event',
+                'rincis:id,pendaftaran_event_header_id,nik_atlet_satu,nama_atlet_satu,tanggal_lahir_atlet_satu,jenis_kelamin_atlet_satu,no_hp_atlet_satu,nik_atlet_dua,nama_atlet_dua,tanggal_lahir_atlet_dua,jenis_kelamin_atlet_dua,no_hp_atlet_dua',
+            ])
+            ->when($validated['search'] ?? null, function (Builder $query, string $search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query->where('kode_pendaftaran', 'like', "%{$search}%")
+                        ->orWhere('nama_tim', 'like', "%{$search}%")
+                        ->orWhereHas('event', fn (Builder $eventQuery) => $eventQuery
+                            ->where('kode_event', 'like', "%{$search}%")
+                            ->orWhere('nama_event', 'like', "%{$search}%"));
+                });
+            })
+            ->latest()
+            ->simplePaginate($validated['per_page'] ?? 15);
+
+        return response()->json([
+            'message' => 'Data peserta event berhasil ditampilkan.',
+            'data' => $participants,
         ]);
     }
 

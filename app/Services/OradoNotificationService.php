@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FcmToken;
+use App\Models\PengurusNotification;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -14,9 +15,15 @@ class OradoNotificationService
 
     public function sendToPengurus(string $title, string $body, array $data = []): void
     {
+        $notification = PengurusNotification::create([
+            'title' => $title,
+            'body' => $body,
+            'data' => $data,
+        ]);
+        $data['notification_id'] = (string) $notification->id;
         $tokens = FcmToken::query()->where('app_type', 'pengurus')->pluck('token');
 
-        $this->sendToTokens($tokens, $title, $body, $data, 'pengurus');
+        $this->sendToTokens($tokens, $title, $body, $data, 'pengurus', dataOnly: true);
     }
 
     public function sendToClubUser(int $userId, string $title, string $body, array $data = []): void
@@ -40,6 +47,7 @@ class OradoNotificationService
         array $data,
         string $appType,
         ?int $userId = null,
+        bool $dataOnly = false,
     ): void {
         if ($tokens->isEmpty()) {
             Log::info('Tidak ada token FCM tujuan.', [
@@ -53,7 +61,7 @@ class OradoNotificationService
         }
 
         try {
-            $results = $this->firebaseMessaging->sendToTokens($tokens, $title, $body, $data);
+            $results = $this->firebaseMessaging->sendToTokens($tokens, $title, $body, $data, $dataOnly);
             $successCount = count(array_filter($results));
 
             Log::info('Pengiriman notifikasi ORADO selesai.', [

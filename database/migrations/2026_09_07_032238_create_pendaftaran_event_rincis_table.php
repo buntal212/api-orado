@@ -26,7 +26,7 @@ return new class extends Migration
             $table->string('kelas_lomba', 100)->nullable();
             $table->string('nomor_peserta', 50)->nullable();
             $table->unsignedBigInteger('biaya_pendaftaran')->default(0);
-            $table->string('status', 30)->default('menunggu');
+            $table->string('status', 30)->default('terdaftar');
             $table->text('catatan')->nullable();
             $table->timestamps();
             $table->unique(

@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api\V3\Event;
 use App\Http\Controllers\Controller;
 use App\Models\MasterEvent;
 use App\Models\PendaftaranEventHeader;
+use App\Models\PendaftaranEventRinci;
 use App\Services\OradoNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class EventRegistrationController extends Controller
 {
@@ -46,6 +48,8 @@ class EventRegistrationController extends Controller
             return response()->json(['message' => 'Pendaftaran untuk event ini tidak aktif atau sudah berakhir.'], 422);
         }
 
+        $this->pastikanAtletBelumTerdaftar($event, $validated);
+
         $pendaftaran = DB::transaction(function () use ($validated, $event): PendaftaranEventHeader {
             $biayaPeserta = $event->biaya_pendaftaran;
 
@@ -59,7 +63,7 @@ class EventRegistrationController extends Controller
                 'email' => $validated['email'] ?? null,
                 'jumlah_peserta' => 2,
                 'total_biaya' => $biayaPeserta,
-                'status_pendaftaran' => 'menunggu',
+                'status_pendaftaran' => 'terdaftar',
                 'status_pembayaran' => 'belum_bayar',
                 'catatan' => $validated['catatan'] ?? null,
             ]);
@@ -77,7 +81,7 @@ class EventRegistrationController extends Controller
                 'jenis_kelamin_atlet_dua' => $validated['jenis_kelamin_atlet_dua'],
                 'no_hp_atlet_dua' => $validated['no_hp_atlet_dua'],
                 'biaya_pendaftaran' => $biayaPeserta,
-                'status' => 'menunggu',
+                'status' => 'terdaftar',
             ]);
 
             return $header;
@@ -88,9 +92,11 @@ class EventRegistrationController extends Controller
             $pendaftaran->nama_tim.' mendaftar pada '.$event->nama_event.'.',
             [
                 'type' => 'event_registration',
+                'menu' => 'event-peserta',
+                'menu_label' => 'Data Peserta Event',
                 'event_id' => (string) $event->id,
                 'registration_code' => $pendaftaran->kode_pendaftaran,
-                'url' => '/event',
+                'url' => '/event-peserta',
             ],
         );
 
@@ -158,5 +164,43 @@ class EventRegistrationController extends Controller
         return $event->status === 'dibuka'
             && ($event->pendaftaran_mulai === null || $event->pendaftaran_mulai->toDateString() <= $today)
             && ($event->pendaftaran_selesai === null || $event->pendaftaran_selesai->toDateString() >= $today);
+    }
+
+    /** @param array<string, mixed> $validated */
+    private function pastikanAtletBelumTerdaftar(MasterEvent $event, array $validated): void
+    {
+        $nikAtletSatu = trim((string) $validated['nik_atlet_satu']);
+        $nikAtletDua = trim((string) $validated['nik_atlet_dua']);
+
+        if ($nikAtletSatu === $nikAtletDua) {
+            throw ValidationException::withMessages([
+                'nik_atlet_dua' => 'NIK atlet dua harus berbeda dengan NIK atlet satu.',
+            ]);
+        }
+
+        $rincis = PendaftaranEventRinci::query()
+            ->whereHas('pendaftaran', fn ($query) => $query->where('master_event_id', $event->id))
+            ->where(function ($query) use ($nikAtletSatu, $nikAtletDua): void {
+                $query->whereIn('nik_atlet_satu', [$nikAtletSatu, $nikAtletDua])
+                    ->orWhereIn('nik_atlet_dua', [$nikAtletSatu, $nikAtletDua]);
+            })
+            ->get(['nik_atlet_satu', 'nik_atlet_dua']);
+
+        $nikTerdaftar = $rincis
+            ->flatMap(fn (PendaftaranEventRinci $rinci) => [$rinci->nik_atlet_satu, $rinci->nik_atlet_dua])
+            ->filter()
+            ->map(fn (string $nik) => trim($nik));
+
+        $errors = [];
+        if ($nikTerdaftar->contains($nikAtletSatu)) {
+            $errors['nik_atlet_satu'] = 'Atlet satu sudah terdaftar pada event ini.';
+        }
+        if ($nikTerdaftar->contains($nikAtletDua)) {
+            $errors['nik_atlet_dua'] = 'Atlet dua sudah terdaftar pada event ini.';
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 }

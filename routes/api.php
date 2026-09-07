@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\PengurusNotificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/auth')
@@ -28,3 +29,5 @@ Route::prefix('v3/event')
 
 Route::prefix('fcm')
     ->group(base_path('routes/fcm/fcm.php'));
+
+Route::middleware('auth:sanctum')->get('/notifikasi', [PengurusNotificationController::class, 'index']);

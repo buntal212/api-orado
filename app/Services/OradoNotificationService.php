@@ -23,6 +23,18 @@ class OradoNotificationService
         $data['notification_id'] = (string) $notification->id;
         $tokens = FcmToken::query()->where('app_type', 'pengurus')->get();
 
+        if (($data['type'] ?? null) === 'event_registration') {
+            Log::info('Event registration FCM', [
+                'token_count' => $tokens->count(),
+                'devices' => $tokens
+                    ->map(fn (FcmToken $token): array => [
+                        'fcm_token_id' => $token->id,
+                        'device_name' => $token->device_name,
+                    ])
+                    ->all(),
+            ]);
+        }
+
         $this->sendToTokens($tokens, $title, $body, $data, 'pengurus');
     }
 
@@ -38,7 +50,7 @@ class OradoNotificationService
     }
 
     /**
-     * @param  Collection<int, string>  $tokens
+     * @param  Collection<int, FcmToken>  $tokens
      */
     private function sendToTokens(
         Collection $tokens,

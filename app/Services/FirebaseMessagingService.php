@@ -76,7 +76,24 @@ class FirebaseMessagingService
         foreach ($tokens as $token) {
             $value = $token instanceof FcmToken ? $token->token : (string) $token;
             $key = $token instanceof FcmToken ? (string) $token->id : hash('sha256', $value);
-            $results[$key] = $this->sendToToken($value, $title, $body, $data, $dataOnly);
+
+            try {
+                if (($data['type'] ?? null) === 'event_registration' && $token instanceof FcmToken) {
+                    Log::info('Sending event FCM', [
+                        'fcm_token_id' => $token->id,
+                        'device_name' => $token->device_name,
+                    ]);
+                }
+
+                $results[$key] = $this->sendToToken($value, $title, $body, $data, $dataOnly);
+            } catch (Throwable $exception) {
+                $results[$key] = false;
+                Log::warning('Pengiriman event FCM per perangkat gagal.', [
+                    'fcm_token_id' => $token instanceof FcmToken ? $token->id : null,
+                    'device_name' => $token instanceof FcmToken ? $token->device_name : null,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
         }
 
         return $results;

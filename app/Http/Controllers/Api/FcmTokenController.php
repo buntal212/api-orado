@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\FcmToken;
+use App\Services\FirebaseMessagingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,16 @@ class FcmTokenController extends Controller
             'device_name' => $validated['device_name'] ?? null,
             'database' => DB::connection()->getDatabaseName(),
         ]);
+
+        if (! empty($validated['device_name'])) {
+            FcmToken::query()
+                ->where('user_id', $user->id)
+                ->where('user_type', $user::class)
+                ->where('app_type', $validated['app_type'])
+                ->where('device_name', $validated['device_name'])
+                ->where('token_hash', '!=', hash('sha256', $validated['token']))
+                ->delete();
+        }
 
         $fcmToken = FcmToken::query()->updateOrCreate(
             ['token_hash' => hash('sha256', $validated['token'])],
@@ -69,5 +80,51 @@ class FcmTokenController extends Controller
             ->delete();
 
         return response()->json(['message' => 'Token notifikasi berhasil dihapus.']);
+    }
+
+    public function test(Request $request, FirebaseMessagingService $firebaseMessaging): JsonResponse
+    {
+        $user = $request->user();
+        $tokens = FcmToken::query()
+            ->where('user_id', $user->id)
+            ->where('user_type', $user::class)
+            ->where('app_type', 'pengurus')
+            ->get();
+
+        if ($tokens->isEmpty()) {
+            return response()->json([
+                'message' => 'Token notifikasi perangkat ini belum tersedia. Aktifkan notifikasi terlebih dahulu.',
+            ], 422);
+        }
+
+        $results = $firebaseMessaging->sendToTokens(
+            $tokens,
+            'Uji Notifikasi ORADO',
+            'Notifikasi percobaan berhasil dikirim ke perangkat Anda.',
+            [
+                'type' => 'notification_test',
+                'url' => '/notifikasi',
+            ],
+            dataOnly: true,
+        );
+        $successCount = count(array_filter($results));
+
+        Log::info('Pengujian notifikasi FCM selesai.', [
+            'user_id' => $user->id,
+            'device_count' => $tokens->count(),
+            'success_count' => $successCount,
+            'failed_count' => count($results) - $successCount,
+        ]);
+
+        if ($successCount === 0) {
+            return response()->json([
+                'message' => 'Firebase menolak token perangkat. Aktifkan ulang notifikasi lalu coba kembali.',
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Notifikasi uji berhasil dikirim.',
+            'data' => ['success_count' => $successCount],
+        ]);
     }
 }

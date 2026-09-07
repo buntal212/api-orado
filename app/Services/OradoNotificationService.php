@@ -21,7 +21,7 @@ class OradoNotificationService
             'data' => $data,
         ]);
         $data['notification_id'] = (string) $notification->id;
-        $tokens = FcmToken::query()->where('app_type', 'pengurus')->pluck('token');
+        $tokens = FcmToken::query()->where('app_type', 'pengurus')->get();
 
         $this->sendToTokens($tokens, $title, $body, $data, 'pengurus', dataOnly: true);
     }
@@ -32,7 +32,7 @@ class OradoNotificationService
             ->where('app_type', 'club')
             ->where('user_id', $userId)
             ->where('user_type', User::class)
-            ->pluck('token');
+            ->get();
 
         $this->sendToTokens($tokens, $title, $body, $data, 'club', $userId);
     }
@@ -63,6 +63,14 @@ class OradoNotificationService
         try {
             $results = $this->firebaseMessaging->sendToTokens($tokens, $title, $body, $data, $dataOnly);
             $successCount = count(array_filter($results));
+            $failedDevices = $tokens
+                ->filter(fn (FcmToken $token): bool => ! ($results[(string) $token->id] ?? false))
+                ->map(fn (FcmToken $token): array => [
+                    'id' => $token->id,
+                    'device_name' => $token->device_name,
+                ])
+                ->values()
+                ->all();
 
             Log::info('Pengiriman notifikasi ORADO selesai.', [
                 'event_type' => $data['type'] ?? null,
@@ -71,6 +79,7 @@ class OradoNotificationService
                 'device_count' => $tokens->count(),
                 'success_count' => $successCount,
                 'failed_count' => count($results) - $successCount,
+                'failed_devices' => $failedDevices,
             ]);
         } catch (Throwable $exception) {
             Log::error('Pengiriman notifikasi ORADO gagal.', [

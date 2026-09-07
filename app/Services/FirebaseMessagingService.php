@@ -60,7 +60,8 @@ class FirebaseMessagingService
         $results = [];
         foreach ($tokens as $token) {
             $value = $token instanceof FcmToken ? $token->token : (string) $token;
-            $results[$value] = $this->sendToToken($value, $title, $body, $data, $dataOnly);
+            $key = $token instanceof FcmToken ? (string) $token->id : hash('sha256', $value);
+            $results[$key] = $this->sendToToken($value, $title, $body, $data, $dataOnly);
         }
 
         return $results;

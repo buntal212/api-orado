@@ -23,5 +23,8 @@ Route::prefix('v2/club')
 Route::prefix('v2/wilayah')
     ->group(base_path('routes/v2/wilayah/wilayah.php'));
 
+Route::prefix('v3/event')
+    ->group(base_path('routes/v3/event/event.php'));
+
 Route::prefix('fcm')
     ->group(base_path('routes/fcm/fcm.php'));

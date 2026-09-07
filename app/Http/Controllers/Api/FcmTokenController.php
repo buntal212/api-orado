@@ -30,16 +30,6 @@ class FcmTokenController extends Controller
             'database' => DB::connection()->getDatabaseName(),
         ]);
 
-        if (! empty($validated['device_name'])) {
-            FcmToken::query()
-                ->where('user_id', $user->id)
-                ->where('user_type', $user::class)
-                ->where('app_type', $validated['app_type'])
-                ->where('device_name', $validated['device_name'])
-                ->where('token_hash', '!=', hash('sha256', $validated['token']))
-                ->delete();
-        }
-
         $fcmToken = FcmToken::query()->updateOrCreate(
             ['token_hash' => hash('sha256', $validated['token'])],
             [

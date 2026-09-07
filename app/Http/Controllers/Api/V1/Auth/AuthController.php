@@ -42,7 +42,9 @@ class AuthController extends Controller
         }
 
         $deviceName = $credentials['device_name'] ?? 'orado-pengurus';
-        $user->tokens()->where('name', $deviceName)->delete();
+        $user->tokens()
+            ->whereIn('name', [$deviceName, 'orado-pengurus'])
+            ->delete();
         $token = $user->createToken($deviceName, ['pengurus'])->plainTextToken;
 
         return response()->json([

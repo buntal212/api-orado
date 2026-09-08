@@ -107,7 +107,7 @@ class EventRegistrationController extends Controller
                 'menu_label' => 'Data Peserta Event',
                 'event_id' => (string) $event->id,
                 'registration_code' => $pendaftaran->kode_pendaftaran,
-                'url' => '/event-peserta',
+                'url' => '/event-peserta?search='.urlencode($pendaftaran->kode_pendaftaran),
             ],
         );
 

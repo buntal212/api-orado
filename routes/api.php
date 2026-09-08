@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\PengurusNotificationController;
+use App\Http\Controllers\Api\PengumumanController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/auth')
@@ -30,4 +31,10 @@ Route::prefix('v3/event')
 Route::prefix('fcm')
     ->group(base_path('routes/fcm/fcm.php'));
 
-Route::middleware('auth:sanctum')->get('/notifikasi', [PengurusNotificationController::class, 'index']);
+Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('/notifikasi', [PengurusNotificationController::class, 'index']);
+    Route::post('/notifikasi/tandai-semua-dibaca', [PengurusNotificationController::class, 'markAllAsRead']);
+    Route::post('/notifikasi/{notification}/tandai-dibaca', [PengurusNotificationController::class, 'markAsRead']);
+    Route::get('/pengumuman/penerima', [PengumumanController::class, 'recipients']);
+    Route::post('/pengumuman', [PengumumanController::class, 'store']);
+});

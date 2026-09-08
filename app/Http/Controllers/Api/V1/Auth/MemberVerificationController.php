@@ -132,6 +132,8 @@ class MemberVerificationController extends Controller
             [
                 'type' => 'pengurus_registration',
                 'user_id' => (string) $user->id,
+                'url' => '/verifikasi-pengajuan',
+                'menu_label' => 'Verifikasi & Pengajuan',
             ],
         );
     }

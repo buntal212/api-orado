@@ -15,27 +15,45 @@ class OradoNotificationService
 
     public function sendToPengurus(string $title, string $body, array $data = []): void
     {
-        $notification = PengurusNotification::create([
-            'title' => $title,
-            'body' => $body,
-            'data' => $data,
-        ]);
-        $data['notification_id'] = (string) $notification->id;
-        $tokens = FcmToken::query()->where('app_type', 'pengurus')->get();
+        $pengurusIds = User::query()->whereDoesntHave('club')->pluck('id')->all();
 
-        if (($data['type'] ?? null) === 'event_registration') {
-            Log::info('Event registration FCM', [
-                'token_count' => $tokens->count(),
-                'devices' => $tokens
-                    ->map(fn (FcmToken $token): array => [
-                        'fcm_token_id' => $token->id,
-                        'device_name' => $token->device_name,
-                    ])
-                    ->all(),
-            ]);
+        $this->sendToPengurusUsers($pengurusIds, $title, $body, $data);
+    }
+
+    /** @param array<int, int> $userIds */
+    public function sendToPengurusUsers(array $userIds, string $title, string $body, array $data = []): void
+    {
+        if ($userIds === []) {
+            return;
         }
 
-        $this->sendToTokens($tokens, $title, $body, $data, 'pengurus');
+        $tokensByUser = FcmToken::query()
+            ->where('app_type', 'pengurus')
+            ->whereNotNull('user_id')
+            ->whereIn('user_id', $userIds)
+            ->get()
+            ->groupBy('user_id');
+
+        $pengurus = User::query()->whereIn('id', $userIds)->get(['id']);
+
+        foreach ($pengurus as $pengurusUser) {
+            $notification = PengurusNotification::create([
+                'user_id' => $pengurusUser->id,
+                'title' => $title,
+                'body' => $body,
+                'data' => $data,
+            ]);
+            $notificationData = [...$data, 'notification_id' => (string) $notification->id];
+
+            $this->sendToTokens(
+                $tokensByUser->get($pengurusUser->id, collect()),
+                $title,
+                $body,
+                $notificationData,
+                'pengurus',
+                $pengurusUser->id,
+            );
+        }
     }
 
     public function sendToClubUser(int $userId, string $title, string $body, array $data = []): void

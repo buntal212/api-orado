@@ -59,9 +59,32 @@ class EventRegistrationController extends Controller
             return response()->json(['message' => 'Pendaftaran untuk event ini tidak aktif atau sudah berakhir.'], 422);
         }
 
-        $this->pastikanAtletBelumTerdaftar($event, $validated);
-
         $pendaftaran = DB::transaction(function () use ($validated, $event): PendaftaranEventHeader {
+            // Kunci baris event agar pendaftaran yang masuk bersamaan dihitung satu per satu.
+            $event = MasterEvent::query()
+                ->lockForUpdate()
+                ->findOrFail($event->id);
+
+            if (! $this->pendaftaranAktif($event)) {
+                throw ValidationException::withMessages([
+                    'master_event_id' => 'Pendaftaran untuk event ini tidak aktif atau sudah berakhir.',
+                ]);
+            }
+
+            $jumlahPesertaBaru = 2;
+            $jumlahTimTerdaftar = PendaftaranEventHeader::query()
+                ->where('master_event_id', $event->id)
+                ->count();
+
+            if ($event->kuota_peserta !== null
+                && $jumlahTimTerdaftar + 1 > $event->kuota_peserta) {
+                throw ValidationException::withMessages([
+                    'master_event_id' => 'Kuota tim event sudah penuh.',
+                ]);
+            }
+
+            $this->pastikanAtletBelumTerdaftar($event, $validated);
+
             $biayaPeserta = $event->biaya_pendaftaran;
 
             $header = PendaftaranEventHeader::create([
@@ -72,7 +95,7 @@ class EventRegistrationController extends Controller
                 'nama_pendaftar' => $validated['nama_pendaftar'] ?? $validated['nama_tim'],
                 'no_hp' => $validated['no_hp'] ?? $validated['no_hp_atlet_satu'],
                 'email' => $validated['email'] ?? null,
-                'jumlah_peserta' => 2,
+                'jumlah_peserta' => $jumlahPesertaBaru,
                 'total_biaya' => $biayaPeserta,
                 'status_pendaftaran' => 'terdaftar',
                 'status_pembayaran' => 'belum_bayar',

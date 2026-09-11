@@ -10,7 +10,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     $this->mock(TurnstileService::class, function (MockInterface $mock): void {
-        $mock->shouldReceive('verify')->once()->andReturnTrue();
+        $mock->shouldReceive('verify')->zeroOrMoreTimes()->andReturnTrue();
     });
 });
 
@@ -94,7 +94,10 @@ test('kuota dua menerima dua tim meski setiap tim berisi dua atlet', function ()
 });
 
 test('nomor registrasi tetap unik saat ada data pendaftaran yang telah dihapus', function (): void {
-    $event = MasterEvent::factory()->create(['status' => 'dibuka']);
+    $event = MasterEvent::factory()->create([
+        'status' => 'dibuka',
+        'kuota_peserta' => null,
+    ]);
 
     $pendaftaranPertama = null;
     foreach (range(1, 29) as $nomor) {
@@ -135,4 +138,70 @@ test('nomor registrasi tetap unik saat ada data pendaftaran yang telah dihapus',
     ])
         ->assertCreated()
         ->assertJsonPath('data.kode_pendaftaran', 'REG-00030');
+});
+
+test('tanggal lahir dengan tahun masa depan ditolak dengan pesan yang jelas', function (): void {
+    $event = MasterEvent::factory()->create(['status' => 'dibuka']);
+
+    $this->postJson('/api/v3/event/pendaftaran', [
+        'master_event_id' => $event->id,
+        'turnstile_token' => 'token-test',
+        'nama_tim' => 'Tim Baru',
+        'nik_atlet_satu' => '3574010101010003',
+        'nama_atlet_satu' => 'Atlet Tiga',
+        'tanggal_lahir_atlet_satu' => '2000-01-01',
+        'jenis_kelamin_atlet_satu' => 'Laki-laki',
+        'no_hp_atlet_satu' => '081234567893',
+        'nik_atlet_dua' => '3574010101010004',
+        'nama_atlet_dua' => 'Atlet Empat',
+        'tanggal_lahir_atlet_dua' => '19875-08-30',
+        'jenis_kelamin_atlet_dua' => 'Perempuan',
+        'no_hp_atlet_dua' => '081234567894',
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('tanggal_lahir_atlet_dua')
+        ->assertJsonPath(
+            'errors.tanggal_lahir_atlet_dua.0',
+            'tanggal lahir atlet dua harus menggunakan format tanggal yang valid.',
+        );
+});
+
+test('duplikat nomor pendaftaran dikembalikan sebagai kesalahan validasi', function (): void {
+    $event = MasterEvent::factory()->create(['status' => 'dibuka']);
+
+    // Simulasikan data lama dengan kode yang tidak sejalan dengan ID database.
+    PendaftaranEventHeader::create([
+        'master_event_id' => $event->id,
+        'kode_event' => $event->kode_event,
+        'kode_pendaftaran' => 'REG-00002',
+        'nama_tim' => 'Tim Lama',
+        'nama_pendaftar' => 'Pendaftar Lama',
+        'no_hp' => '081234567890',
+        'jumlah_peserta' => 2,
+        'total_biaya' => $event->biaya_pendaftaran,
+        'status_pendaftaran' => 'terdaftar',
+        'status_pembayaran' => 'belum_bayar',
+    ]);
+
+    $this->postJson('/api/v3/event/pendaftaran', [
+        'master_event_id' => $event->id,
+        'turnstile_token' => 'token-test',
+        'nama_tim' => 'Tim Baru',
+        'nik_atlet_satu' => '3574010101010003',
+        'nama_atlet_satu' => 'Atlet Tiga',
+        'tanggal_lahir_atlet_satu' => '2000-01-01',
+        'jenis_kelamin_atlet_satu' => 'Laki-laki',
+        'no_hp_atlet_satu' => '081234567893',
+        'nik_atlet_dua' => '3574010101010004',
+        'nama_atlet_dua' => 'Atlet Empat',
+        'tanggal_lahir_atlet_dua' => '2001-01-01',
+        'jenis_kelamin_atlet_dua' => 'Perempuan',
+        'no_hp_atlet_dua' => '081234567894',
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('kode_pendaftaran')
+        ->assertJsonPath(
+            'errors.kode_pendaftaran.0',
+            'Nomor pendaftaran sudah digunakan. Silakan kirim pendaftaran sekali lagi.',
+        );
 });

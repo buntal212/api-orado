@@ -8,6 +8,7 @@ use App\Models\PendaftaranEventHeader;
 use App\Models\PendaftaranEventRinci;
 use App\Services\OradoNotificationService;
 use App\Services\TurnstileService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,72 +61,82 @@ class EventRegistrationController extends Controller
             return response()->json(['message' => 'Pendaftaran untuk event ini tidak aktif atau sudah berakhir.'], 422);
         }
 
-        $pendaftaran = DB::transaction(function () use ($validated, $event): PendaftaranEventHeader {
-            // Kunci baris event agar pendaftaran yang masuk bersamaan dihitung satu per satu.
-            $event = MasterEvent::query()
-                ->lockForUpdate()
-                ->findOrFail($event->id);
+        try {
+            $pendaftaran = DB::transaction(function () use ($validated, $event): PendaftaranEventHeader {
+                // Kunci baris event agar pendaftaran yang masuk bersamaan dihitung satu per satu.
+                $event = MasterEvent::query()
+                    ->lockForUpdate()
+                    ->findOrFail($event->id);
 
-            if (! $this->pendaftaranAktif($event)) {
+                if (! $this->pendaftaranAktif($event)) {
+                    throw ValidationException::withMessages([
+                        'master_event_id' => 'Pendaftaran untuk event ini tidak aktif atau sudah berakhir.',
+                    ]);
+                }
+
+                $jumlahPesertaBaru = 2;
+                $jumlahTimTerdaftar = PendaftaranEventHeader::query()
+                    ->where('master_event_id', $event->id)
+                    ->count();
+
+                if ($event->kuota_peserta !== null
+                    && $jumlahTimTerdaftar + 1 > $event->kuota_peserta) {
+                    throw ValidationException::withMessages([
+                        'master_event_id' => 'Kuota tim event sudah penuh.',
+                    ]);
+                }
+
+                $this->pastikanAtletBelumTerdaftar($event, $validated);
+
+                $biayaPeserta = $event->biaya_pendaftaran;
+
+                $header = PendaftaranEventHeader::create([
+                    'master_event_id' => $event->id,
+                    'kode_event' => $event->kode_event,
+                    // Kode sementara mencegah bentrok sebelum ID database yang unik tersedia.
+                    'kode_pendaftaran' => 'TMP-'.Str::uuid(),
+                    'nama_tim' => $validated['nama_tim'],
+                    'nama_pendaftar' => $validated['nama_pendaftar'] ?? $validated['nama_tim'],
+                    'no_hp' => $validated['no_hp'] ?? $validated['no_hp_atlet_satu'],
+                    'email' => $validated['email'] ?? null,
+                    'jumlah_peserta' => $jumlahPesertaBaru,
+                    'total_biaya' => $biayaPeserta,
+                    'status_pendaftaran' => 'terdaftar',
+                    'status_pembayaran' => 'belum_bayar',
+                    'catatan' => $validated['catatan'] ?? null,
+                ]);
+
+                $header->rincis()->create([
+                    'nama_peserta' => $validated['nama_atlet_satu'],
+                    'nik_atlet_satu' => $validated['nik_atlet_satu'],
+                    'nama_atlet_satu' => $validated['nama_atlet_satu'],
+                    'tanggal_lahir_atlet_satu' => $validated['tanggal_lahir_atlet_satu'],
+                    'jenis_kelamin_atlet_satu' => $validated['jenis_kelamin_atlet_satu'],
+                    'no_hp_atlet_satu' => $validated['no_hp_atlet_satu'],
+                    'nik_atlet_dua' => $validated['nik_atlet_dua'],
+                    'nama_atlet_dua' => $validated['nama_atlet_dua'],
+                    'tanggal_lahir_atlet_dua' => $validated['tanggal_lahir_atlet_dua'],
+                    'jenis_kelamin_atlet_dua' => $validated['jenis_kelamin_atlet_dua'],
+                    'no_hp_atlet_dua' => $validated['no_hp_atlet_dua'],
+                    'biaya_pendaftaran' => $biayaPeserta,
+                    'status' => 'terdaftar',
+                ]);
+
+                $header->update([
+                    'kode_pendaftaran' => sprintf('REG-%05d', $header->id),
+                ]);
+
+                return $header;
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            if (str_contains($exception->getMessage(), 'kode_pendaftaran')) {
                 throw ValidationException::withMessages([
-                    'master_event_id' => 'Pendaftaran untuk event ini tidak aktif atau sudah berakhir.',
+                    'kode_pendaftaran' => 'Nomor pendaftaran sudah digunakan. Silakan kirim pendaftaran sekali lagi.',
                 ]);
             }
 
-            $jumlahPesertaBaru = 2;
-            $jumlahTimTerdaftar = PendaftaranEventHeader::query()
-                ->where('master_event_id', $event->id)
-                ->count();
-
-            if ($event->kuota_peserta !== null
-                && $jumlahTimTerdaftar + 1 > $event->kuota_peserta) {
-                throw ValidationException::withMessages([
-                    'master_event_id' => 'Kuota tim event sudah penuh.',
-                ]);
-            }
-
-            $this->pastikanAtletBelumTerdaftar($event, $validated);
-
-            $biayaPeserta = $event->biaya_pendaftaran;
-
-            $header = PendaftaranEventHeader::create([
-                'master_event_id' => $event->id,
-                'kode_event' => $event->kode_event,
-                // Kode sementara mencegah bentrok sebelum ID database yang unik tersedia.
-                'kode_pendaftaran' => 'TMP-'.Str::uuid(),
-                'nama_tim' => $validated['nama_tim'],
-                'nama_pendaftar' => $validated['nama_pendaftar'] ?? $validated['nama_tim'],
-                'no_hp' => $validated['no_hp'] ?? $validated['no_hp_atlet_satu'],
-                'email' => $validated['email'] ?? null,
-                'jumlah_peserta' => $jumlahPesertaBaru,
-                'total_biaya' => $biayaPeserta,
-                'status_pendaftaran' => 'terdaftar',
-                'status_pembayaran' => 'belum_bayar',
-                'catatan' => $validated['catatan'] ?? null,
-            ]);
-
-            $header->rincis()->create([
-                'nama_peserta' => $validated['nama_atlet_satu'],
-                'nik_atlet_satu' => $validated['nik_atlet_satu'],
-                'nama_atlet_satu' => $validated['nama_atlet_satu'],
-                'tanggal_lahir_atlet_satu' => $validated['tanggal_lahir_atlet_satu'],
-                'jenis_kelamin_atlet_satu' => $validated['jenis_kelamin_atlet_satu'],
-                'no_hp_atlet_satu' => $validated['no_hp_atlet_satu'],
-                'nik_atlet_dua' => $validated['nik_atlet_dua'],
-                'nama_atlet_dua' => $validated['nama_atlet_dua'],
-                'tanggal_lahir_atlet_dua' => $validated['tanggal_lahir_atlet_dua'],
-                'jenis_kelamin_atlet_dua' => $validated['jenis_kelamin_atlet_dua'],
-                'no_hp_atlet_dua' => $validated['no_hp_atlet_dua'],
-                'biaya_pendaftaran' => $biayaPeserta,
-                'status' => 'terdaftar',
-            ]);
-
-            $header->update([
-                'kode_pendaftaran' => sprintf('REG-%05d', $header->id),
-            ]);
-
-            return $header;
-        });
+            throw $exception;
+        }
 
         $this->notificationService->sendToPengurus(
             'Pendaftaran Event Baru',
@@ -175,12 +186,12 @@ class EventRegistrationController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'nik_atlet_satu' => ['required', 'string', 'max:16'],
             'nama_atlet_satu' => ['required', 'string', 'max:150'],
-            'tanggal_lahir_atlet_satu' => ['required', 'date'],
+            'tanggal_lahir_atlet_satu' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'jenis_kelamin_atlet_satu' => ['required', 'in:Laki-laki,Perempuan'],
             'no_hp_atlet_satu' => ['required', 'string', 'max:20'],
             'nik_atlet_dua' => ['required', 'string', 'max:16'],
             'nama_atlet_dua' => ['required', 'string', 'max:150'],
-            'tanggal_lahir_atlet_dua' => ['required', 'date'],
+            'tanggal_lahir_atlet_dua' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'jenis_kelamin_atlet_dua' => ['required', 'in:Laki-laki,Perempuan'],
             'no_hp_atlet_dua' => ['required', 'string', 'max:20'],
         ];
@@ -189,7 +200,7 @@ class EventRegistrationController extends Controller
     /** @return array<string, string> */
     private function messages(): array
     {
-        return ['required' => ':attribute wajib diisi.', 'email' => 'Email tidak valid.', 'exists' => 'Event yang dipilih tidak tersedia.', 'array' => 'Data peserta tidak valid.', 'min.array' => 'Minimal harus ada satu peserta.', 'date' => ':attribute harus berupa tanggal yang valid.', 'in' => 'Pilihan :attribute tidak valid.'];
+        return ['required' => ':attribute wajib diisi.', 'email' => 'Email tidak valid.', 'exists' => 'Event yang dipilih tidak tersedia.', 'array' => 'Data peserta tidak valid.', 'min.array' => 'Minimal harus ada satu peserta.', 'date_format' => ':attribute harus menggunakan format tanggal yang valid.', 'before_or_equal' => ':attribute tidak boleh melebihi tanggal hari ini.', 'in' => 'Pilihan :attribute tidak valid.'];
     }
 
     /** @return array<string, string> */

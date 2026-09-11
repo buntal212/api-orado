@@ -11,6 +11,7 @@ use App\Services\TurnstileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class EventRegistrationController extends Controller
@@ -90,7 +91,8 @@ class EventRegistrationController extends Controller
             $header = PendaftaranEventHeader::create([
                 'master_event_id' => $event->id,
                 'kode_event' => $event->kode_event,
-                'kode_pendaftaran' => sprintf('REG-%05d', PendaftaranEventHeader::count() + 1),
+                // Kode sementara mencegah bentrok sebelum ID database yang unik tersedia.
+                'kode_pendaftaran' => 'TMP-'.Str::uuid(),
                 'nama_tim' => $validated['nama_tim'],
                 'nama_pendaftar' => $validated['nama_pendaftar'] ?? $validated['nama_tim'],
                 'no_hp' => $validated['no_hp'] ?? $validated['no_hp_atlet_satu'],
@@ -116,6 +118,10 @@ class EventRegistrationController extends Controller
                 'no_hp_atlet_dua' => $validated['no_hp_atlet_dua'],
                 'biaya_pendaftaran' => $biayaPeserta,
                 'status' => 'terdaftar',
+            ]);
+
+            $header->update([
+                'kode_pendaftaran' => sprintf('REG-%05d', $header->id),
             ]);
 
             return $header;

@@ -10,6 +10,7 @@ Route::get('/pendaftaran/{kodePendaftaran}', [EventRegistrationController::class
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/', [EventController::class, 'index']);
+    Route::get('/peserta/cetak', [EventController::class, 'printParticipants']);
     Route::get('/peserta', [EventController::class, 'participants']);
     Route::post('/simpan', [EventController::class, 'store']);
     Route::post('/{masterEvent}/edit', [EventController::class, 'update']);

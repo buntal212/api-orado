@@ -42,34 +42,31 @@ class EventController extends Controller
 
     public function participants(Request $request): JsonResponse
     {
-        $validated = $request->validate(
-            [
-                'search' => ['nullable', 'string', 'max:100'],
-            ],
-            $this->validationMessages(),
-            $this->validationAttributes(),
-        );
+        $validated = $this->validatedParticipantFilter($request);
 
-        $participants = PendaftaranEventHeader::query()
-            ->with([
-                'event:id,kode_event,nama_event',
-                'rincis:id,pendaftaran_event_header_id,nik_atlet_satu,nama_atlet_satu,tanggal_lahir_atlet_satu,jenis_kelamin_atlet_satu,no_hp_atlet_satu,nik_atlet_dua,nama_atlet_dua,tanggal_lahir_atlet_dua,jenis_kelamin_atlet_dua,no_hp_atlet_dua',
-            ])
-            ->when($validated['search'] ?? null, function (Builder $query, string $search): void {
-                $query->where(function (Builder $query) use ($search): void {
-                    $query->where('kode_pendaftaran', 'like', "%{$search}%")
-                        ->orWhere('nama_tim', 'like', "%{$search}%")
-                        ->orWhereHas('event', fn (Builder $eventQuery) => $eventQuery
-                            ->where('kode_event', 'like', "%{$search}%")
-                            ->orWhere('nama_event', 'like', "%{$search}%"));
-                });
-            })
+        $participants = $this->participantQuery($validated)
             ->latest()
             ->simplePaginate(15);
 
         return response()->json([
             'message' => 'Data peserta event berhasil ditampilkan.',
             'data' => $participants,
+        ]);
+    }
+
+    public function printParticipants(Request $request): JsonResponse
+    {
+        $validated = $this->validatedParticipantFilter($request);
+        $eventId = $validated['master_event_id'] ?? null;
+
+        return response()->json([
+            'message' => 'Data peserta event untuk cetak berhasil ditampilkan.',
+            'data' => $this->participantQuery($validated)->latest()->get(),
+            'meta' => [
+                'event' => $eventId
+                    ? MasterEvent::query()->find($eventId, ['id', 'kode_event', 'nama_event'])
+                    : null,
+            ],
         ]);
     }
 
@@ -120,6 +117,42 @@ class EventController extends Controller
                 'biaya_pendaftaran' => ['required', 'integer', 'min:0'],
                 'poster' => ['nullable', 'string', 'max:255'],
                 'status' => ['required', 'in:draft,dibuka,ditutup'],
+            ],
+            $this->validationMessages(),
+            $this->validationAttributes(),
+        );
+    }
+
+    /** @param array<string, mixed> $validated */
+    private function participantQuery(array $validated): Builder
+    {
+        return PendaftaranEventHeader::query()
+            ->with([
+                'event:id,kode_event,nama_event',
+                'rincis:id,pendaftaran_event_header_id,nik_atlet_satu,nama_atlet_satu,tanggal_lahir_atlet_satu,jenis_kelamin_atlet_satu,no_hp_atlet_satu,nik_atlet_dua,nama_atlet_dua,tanggal_lahir_atlet_dua,jenis_kelamin_atlet_dua,no_hp_atlet_dua',
+            ])
+            ->when($validated['search'] ?? null, function (Builder $query, string $search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query->where('kode_pendaftaran', 'like', "%{$search}%")
+                        ->orWhere('nama_tim', 'like', "%{$search}%")
+                        ->orWhereHas('event', fn (Builder $eventQuery) => $eventQuery
+                            ->where('kode_event', 'like', "%{$search}%")
+                            ->orWhere('nama_event', 'like', "%{$search}%"));
+                });
+            })
+            ->when(
+                $validated['master_event_id'] ?? null,
+                fn (Builder $query, int $eventId) => $query->where('master_event_id', $eventId),
+            );
+    }
+
+    /** @return array<string, mixed> */
+    private function validatedParticipantFilter(Request $request): array
+    {
+        return $request->validate(
+            [
+                'search' => ['nullable', 'string', 'max:100'],
+                'master_event_id' => ['nullable', 'integer', 'exists:master_events,id'],
             ],
             $this->validationMessages(),
             $this->validationAttributes(),
